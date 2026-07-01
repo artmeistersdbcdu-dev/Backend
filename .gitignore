@@ -1,0 +1,38 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+
+# Build output
+dist/
+build/
+
+# Go workspace
+go.work
+go.work.sum
+
+# Test cache
+*.test
+*.out
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+*.txt
+uploads/
