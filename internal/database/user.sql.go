@@ -179,18 +179,19 @@ SELECT
     status,
     role,
     image
+    social_links
 FROM users
 WHERE role != 'member'
   AND status != 'banned'
 `
 
 type GetCoreMembersRow struct {
-	ID     uuid.UUID
-	Name   string
-	Email  string
-	Status AccountStatus
-	Role   UserRole
-	Image  sql.NullString
+	ID          uuid.UUID
+	Name        string
+	Email       string
+	Status      AccountStatus
+	Role        UserRole
+	SocialLinks sql.NullString
 }
 
 func (q *Queries) GetCoreMembers(ctx context.Context) ([]GetCoreMembersRow, error) {
@@ -208,7 +209,7 @@ func (q *Queries) GetCoreMembers(ctx context.Context) ([]GetCoreMembersRow, erro
 			&i.Email,
 			&i.Status,
 			&i.Role,
-			&i.Image,
+			&i.SocialLinks,
 		); err != nil {
 			return nil, err
 		}

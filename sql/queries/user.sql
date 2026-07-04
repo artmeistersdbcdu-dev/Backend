@@ -148,6 +148,7 @@ SELECT
     status,
     role,
     image
+    social_links
 FROM users
 WHERE role != 'member'
   AND status != 'banned';
