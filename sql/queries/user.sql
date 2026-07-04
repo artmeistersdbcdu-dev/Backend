@@ -147,7 +147,7 @@ SELECT
     email,
     status,
     role,
-    image
+    image,
     social_links
 FROM users
 WHERE role != 'member'

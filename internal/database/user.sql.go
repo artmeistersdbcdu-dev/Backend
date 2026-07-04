@@ -178,7 +178,7 @@ SELECT
     email,
     status,
     role,
-    image
+    image,
     social_links
 FROM users
 WHERE role != 'member'
@@ -191,7 +191,8 @@ type GetCoreMembersRow struct {
 	Email       string
 	Status      AccountStatus
 	Role        UserRole
-	SocialLinks sql.NullString
+	Image       sql.NullString
+	SocialLinks json.RawMessage
 }
 
 func (q *Queries) GetCoreMembers(ctx context.Context) ([]GetCoreMembersRow, error) {
@@ -209,6 +210,7 @@ func (q *Queries) GetCoreMembers(ctx context.Context) ([]GetCoreMembersRow, erro
 			&i.Email,
 			&i.Status,
 			&i.Role,
+			&i.Image,
 			&i.SocialLinks,
 		); err != nil {
 			return nil, err
