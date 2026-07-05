@@ -86,7 +86,7 @@ func DbQuries() (*ApiConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	query := database.New(conn)
+	query := database.NewDelayedDB(conn)
 	if query == nil {
 		return nil, errors.New("Connection Failed")
 	}
