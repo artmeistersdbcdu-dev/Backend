@@ -32,9 +32,16 @@ func LoadCache() *Cache {
 	return cache
 }
 
-func cleanUp() {
-
+func (c *Cache) cleanUp() {
+	for range time.Tick(timeInterval) {
+		curr := time.Now()
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.EventCleanUp(curr)
+		c.ArtCleanUp(curr)
+		c.UserCleanUp(curr)
+	}
 }
 func init() {
-	go cleanUp()
+	go cache.cleanUp()
 }

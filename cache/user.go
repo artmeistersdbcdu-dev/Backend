@@ -31,3 +31,13 @@ func (c *Cache) SetUser(id uuid.UUID, user User) {
 	}
 
 }
+func (c *Cache) UserCleanUp(curr time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for id, item := range c.Users {
+		if !curr.Before(item.ExpireAt) {
+			delete(c.Users, id)
+		}
+	}
+}

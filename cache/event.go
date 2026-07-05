@@ -14,12 +14,29 @@ func (c *Cache) SetEvent(id uuid.UUID, event Event) {
 		ExpireAt: time.Now().Add(timeInterval),
 	}
 }
-func (c *Cache) GetEvent(id uuid.UUID) {
+func (c *Cache) GetEvent(id uuid.UUID) *Event {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	event, ok := c.Events[id]
+	if !ok {
+		return nil
+	}
+	event.ExpireAt = time.Now().Add(timeInterval)
+	c.Events[id] = event
+	return &event.Event
 }
 func (c *Cache) DeleteEvent(id uuid.UUID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.Events, id)
+}
+func (c *Cache) EventCleanUp(curr time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for id, item := range c.Events {
+		if !curr.Before(item.ExpireAt) {
+			delete(c.Events, id)
+		}
+	}
 }

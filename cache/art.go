@@ -32,3 +32,13 @@ func (c *Cache) SetArt(id uuid.UUID, art Art) {
 	}
 
 }
+func (c *Cache) ArtCleanUp(curr time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for id, item := range c.Arts {
+		if !curr.Before(item.ExpireAt) {
+			delete(c.Arts, id)
+		}
+	}
+}
