@@ -2,9 +2,12 @@ package cache
 
 import (
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const timeInterval = time.Minute * 60 * 24 * 7
 
 type Cache struct {
 	mu     sync.RWMutex
@@ -13,14 +16,25 @@ type Cache struct {
 	Arts   map[uuid.UUID]ArtCache
 }
 
-func GetUser(id uuid.UUID)            {}
-func DeleteUser(id uuid.UUID)         {}
-func SetUser(id uuid.UUID, user User) {}
+var (
+	cache *Cache
+	once  sync.Once
+)
 
-func GetArt(id uuid.UUID)          {}
-func DeleteArt(id uuid.UUID)       {}
-func SetArt(id uuid.UUID, art Art) {}
+func LoadCache() *Cache {
+	once.Do(func() {
+		cache = &Cache{
+			Users:  make(map[uuid.UUID]UserCache),
+			Events: make(map[uuid.UUID]EventCache),
+			Arts:   make(map[uuid.UUID]ArtCache),
+		}
+	})
+	return cache
+}
 
-func SetEvent(id uuid.UUID, event Event) {}
-func GetEvent(id uuid.UUID)              {}
-func DeleteEvent(id uuid.UUID)           {}
+func cleanUp() {
+
+}
+func init() {
+	go cleanUp()
+}

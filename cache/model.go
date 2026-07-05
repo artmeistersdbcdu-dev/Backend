@@ -3,9 +3,8 @@ package cache
 import (
 	"database/sql"
 	"encoding/json"
-	"time"
-
 	"github.com/google/uuid"
+	"time"
 )
 
 type User struct {
@@ -54,16 +53,13 @@ type EventAttendee struct {
 }
 type EventCache struct {
 	Event    Event
-	LastUsed time.Time
 	ExpireAt time.Time
 }
 type ArtCache struct {
 	Art      Art
-	LastUsed time.Time
 	ExpireAt time.Time
 }
 type UserCache struct {
 	User     User
-	LastUsed time.Time
 	ExpireAt time.Time
 }
