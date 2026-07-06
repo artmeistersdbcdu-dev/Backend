@@ -548,12 +548,41 @@ func (h *Handler) HandleGetApprovedUser(w http.ResponseWriter, r *http.Request) 
 	handler.RespondWithJson(w, http.StatusOK, user)
 }
 
-// TODO(Cache): Cache core members list (T2 route).
-// Cache Miss -> DB GetCoreMembers, Set cache with list key.
-// Cache Hit -> Return cached list.
-// Invalidate when user role changes or status changes.
+// TODO(Cache): Implement caching for GET /core-member using list cache.
+//
+// CacheKey: "core_members"
+//
+// Plan:
+//   1. Check h.Cache.GetList("core_members")
+//      - If hit, return cached data immediately.
+//   2. On miss, call h.Repo.GetCoreMembers(ctx)
+//   3. Store result via h.Cache.SetList("core_members", users)
+//   4. Return fresh data.
+//
+// Invalidation triggers (in HandlerRole admin):
+//   - User role changes (member <-> core_member/vp/president)
+//   - User status changes (e.g., banned)
+//
+// Invalidation: h.Cache.DeleteList("core_members")
+//
+// GetCoreMembersRow (sqlc generated in internal/database/user.sql.go):
+//   type GetCoreMembersRow struct {
+//       ID          uuid.UUID
+//       Name        string
+//       Email       string
+//       Status      AccountStatus
+//       Role        UserRole
+//       Image       sql.NullString
+//       SocialLinks json.RawMessage
+//   }
 func (h *Handler) HandleGetCoreMember(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
+	cached := h.Cache.GetList("core_members")
+	if cached != nil {
+		fmt.Println("Cache baby")
+		handler.RespondWithJson(w, http.StatusOK, cached)
+		return
+	}
 	user, err := h.Repo.GetCoreMembers(r.Context())
 	if err != nil {
 		if log != nil {
@@ -565,5 +594,6 @@ func (h *Handler) HandleGetCoreMember(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info("HandleGetAllUser: successfully")
 	}
+	h.Cache.SetList("core_members", user)
 	handler.RespondWithJson(w, http.StatusOK, user)
 }

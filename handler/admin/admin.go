@@ -73,7 +73,10 @@ func (h *ArtHandler) HandlerArtStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	handler.RespondWithJson(w, http.StatusOK, art)
 }
-// TODO(Cache): UpdateUser in cache (status, role changed). Invalidate core members and approved user list caches.
+// TODO(Cache): When user role or status changes, invalidate:
+//   1. h.Cache.DeleteList("core_members")   -- core member list
+//   2. h.Cache.DeleteList("approved_users") -- approved user list (already done below)
+//   3. h.Cache.DeleteUser(id)               -- individual user cache (already done below)
 func (h *UserHandler) HandlerRole(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	actor, ok := middleware.GetSenior(r.Context())
@@ -150,6 +153,7 @@ func (h *UserHandler) HandlerRole(w http.ResponseWriter, r *http.Request) {
 	if h.Cache != nil {
 		h.Cache.DeleteUser(id)
 		h.Cache.DeleteList("approved_users")
+		h.Cache.DeleteList("core_members")
 	}
 	handler.RespondWithJson(w, http.StatusOK, user)
 }
