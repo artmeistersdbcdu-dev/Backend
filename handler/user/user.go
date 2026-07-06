@@ -40,6 +40,7 @@ func (h *Handler) HandleGetUserById(w http.ResponseWriter, r *http.Request) {
 	}
 	userCache := h.Cache.GetUser(userId)
 	if userCache != nil {
+		fmt.Println("Cache BABY")
 		user := database.GetUserRow{
 			ID:          userId,
 			Name:        userCache.Name,
@@ -191,7 +192,7 @@ func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
 
 	userCache := h.Cache.GetUser(id)
 	if userCache != nil {
-		fmt.Println("Using Cache Baby")
+		fmt.Println("Cache BABY")
 		user := database.GetUserRow{
 			ID:          id,
 			Name:        userCache.Name,
@@ -528,6 +529,7 @@ func (h *Handler) HandleGetApprovedUser(w http.ResponseWriter, r *http.Request) 
 	log, _ := logger.GetLogger()
 	cached := h.Cache.GetList("approved_users")
 	if cached != nil {
+		fmt.Println("Cache BABY")
 		handler.RespondWithJson(w, http.StatusOK, cached)
 		return
 	}

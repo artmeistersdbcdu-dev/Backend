@@ -14,8 +14,8 @@ func AdminRoute(userHandler *user.Handler, artHandler *art.Handler, middlewareHa
 	senior := middlewareHandler.MiddlewareSeniorAuth
 	moderator := middlewareHandler.MiddlewareModeratorAuth
 
-	adminUserHandler := &UserHandler{Repo: userHandler.Repo}
-	adminArtHandler := &ArtHandler{Repo: artHandler.Repo}
+	adminUserHandler := &UserHandler{Repo: userHandler.Repo, Cache: userHandler.Cache}
+	adminArtHandler := &ArtHandler{Repo: artHandler.Repo, Cache: artHandler.Cache}
 
 	r.Patch("/arts/{art_id}/status", moderator(http.HandlerFunc(adminArtHandler.HandlerArtStatus)))
 	r.Patch("/users/{user_id}/status", senior(http.HandlerFunc(adminUserHandler.HandlerRole)))

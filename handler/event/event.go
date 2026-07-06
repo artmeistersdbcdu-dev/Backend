@@ -23,7 +23,8 @@ type EventHandler struct {
 	Cache *cache.Cache
 }
 type EventAttendeeHandler struct {
-	Repo database.EventAttendeesRepository
+	Repo  database.EventAttendeesRepository
+	Cache *cache.Cache
 }
 
 // TODO(Cache): SetEvent after creation. Invalidate event list cache.
@@ -94,6 +95,17 @@ func (h *EventHandler) HandleCreateEvent(w http.ResponseWriter, r *http.Request)
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleCreateEvent: event %s created", id))
 	}
+	newCache := cache.Event{
+		Name:        params.Name,
+		Description: params.Description,
+		Venue:       params.Venue,
+		Image:       params.Image,
+		BannerImage: params.BannerImage,
+		EventDate:   params.EventDate,
+		Status:      string(params.Status),
+	}
+	h.Cache.SetEvent(id, newCache)
+	h.Cache.DeleteList("events")
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": res.String()})
 }
 // TODO(Cache): DeleteEvent from cache. Invalidate event list cache.
@@ -114,12 +126,14 @@ func (h *EventHandler) HandleDeleteEvent(w http.ResponseWriter, r *http.Request)
 			handler.RespondWithError(w, http.StatusNotFound, "Event not found")
 			return
 		}
-		if log != nil {
-			log.Error(fmt.Sprintf("HandleDeleteEvent: failed to delete event %s: %v", eventId, err))
+	if log != nil {
+		log.Error(fmt.Sprintf("HandleDeleteEvent: failed to delete event %s: %v", eventId, err))
 		}
 		handler.RespondWithError(w, http.StatusInternalServerError, "Failed to delete event")
 		return
 	}
+	h.Cache.DeleteEvent(eventId)
+	h.Cache.DeleteList("events")
 	handler.RespondWithJson(w, http.StatusOK, "ok")
 }
 // TODO(Cache): Cache Event by UUID (already reads cache. SetEvent on cache miss).
@@ -137,6 +151,7 @@ func (h *EventHandler) HandleGetEventById(w http.ResponseWriter, r *http.Request
 	}
 	eventCache := h.Cache.GetEvent(eventId)
 	if eventCache != nil {
+		fmt.Println("Cache BABY")
 		event := database.GetEventByIDRow{
 			ID:          eventId,
 			Name:        eventCache.Name,
@@ -161,6 +176,16 @@ func (h *EventHandler) HandleGetEventById(w http.ResponseWriter, r *http.Request
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleGetEventById: retrieved event %s successfully", eventId))
 	}
+	newCache := cache.Event{
+		Name:        res.Name,
+		Description: res.Description,
+		Venue:       res.Venue,
+		Image:       res.Image,
+		BannerImage: res.BannerImage,
+		EventDate:   res.EventDate,
+		Status:      string(res.Status),
+	}
+	h.Cache.SetEvent(eventId, newCache)
 	handler.RespondWithJson(w, http.StatusOK, res)
 }
 // TODO(Cache): HIGH VALUE. Cache event list (T1 route).
@@ -169,6 +194,12 @@ func (h *EventHandler) HandleGetEventById(w http.ResponseWriter, r *http.Request
 // Invalidate when event is created, updated, or deleted.
 func (h *EventHandler) HandleGetAllEvent(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
+	cached := h.Cache.GetList("events")
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, http.StatusOK, cached)
+		return
+	}
 	res, err := h.Repo.ListEvents(r.Context())
 	if err != nil {
 		if log != nil {
@@ -180,6 +211,7 @@ func (h *EventHandler) HandleGetAllEvent(w http.ResponseWriter, r *http.Request)
 	if log != nil {
 		log.Info("HandleGetAllEvent: retrieved all events successfully")
 	}
+	h.Cache.SetList("events", res)
 	handler.RespondWithJson(w, http.StatusOK, res)
 }
 // TODO(Cache): UpdateEvent in cache. Invalidate event list cache.
@@ -260,7 +292,8 @@ func (h *EventHandler) HandleUpdateEvent(w http.ResponseWriter, r *http.Request)
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleUpdateEvent: event %s updated", id))
 	}
-
+	h.Cache.DeleteEvent(id)
+	h.Cache.DeleteList("events")
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": res.String()})
 }
 // TODO(Cache): Invalidate attendees list cache for this event_id.
@@ -294,6 +327,8 @@ func (h *EventAttendeeHandler) HandleJoinEvent(w http.ResponseWriter, r *http.Re
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleJoinEvent: user %s joined event %s", userId, event_id))
 	}
+	h.Cache.DeleteList("event_attendees:" + event_id.String())
+	h.Cache.DeleteList("my_events:" + userId.String())
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": res.String()})
 }
 // TODO(Cache): Invalidate attendees list cache for this event_id.
@@ -338,6 +373,8 @@ func (h *EventAttendeeHandler) HandleDeleteEventAttendee(w http.ResponseWriter, 
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleDeleteEventAttendee: user %s removed from event %s", userId, event_id))
 	}
+	h.Cache.DeleteList("event_attendees:" + event_id.String())
+	h.Cache.DeleteList("my_events:" + userId.String())
 	handler.RespondWithJson(w, http.StatusOK, "ok")
 }
 // TODO(Cache): Cache attendees list by event_id UUID (T2 route).
@@ -355,6 +392,13 @@ func (h *EventAttendeeHandler) HandleAllEventAttendee(w http.ResponseWriter, r *
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
 		return
 	}
+	cacheKey := "event_attendees:" + event_id.String()
+	cached := h.Cache.GetList(cacheKey)
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, http.StatusOK, cached)
+		return
+	}
 	res, err := h.Repo.ListEventAttendees(r.Context(), event_id)
 
 	if err != nil {
@@ -367,6 +411,7 @@ func (h *EventAttendeeHandler) HandleAllEventAttendee(w http.ResponseWriter, r *
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleAllEventAttendee: retrieved attendees for event %s successfully", event_id))
 	}
+	h.Cache.SetList(cacheKey, res)
 	handler.RespondWithJson(w, http.StatusOK, res)
 }
 // TODO(Cache): Low value (T3, existence check). Skip cache or use short TTL.
@@ -409,6 +454,13 @@ func (h *EventAttendeeHandler) HandleGetMyAllEvent(w http.ResponseWriter, r *htt
 	log, _ := logger.GetLogger()
 	user, _ := middleware.GetUser(r.Context())
 
+	cacheKey := "my_events:" + user.ID.String()
+	cached := h.Cache.GetList(cacheKey)
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, http.StatusOK, cached)
+		return
+	}
 	res, err := h.Repo.ListMyEvents(r.Context(), user.ID)
 	if err != nil {
 		if log != nil {
@@ -427,6 +479,6 @@ func (h *EventAttendeeHandler) HandleGetMyAllEvent(w http.ResponseWriter, r *htt
 			len(res), user.ID,
 		))
 	}
-
+	h.Cache.SetList(cacheKey, res)
 	handler.RespondWithJson(w, http.StatusOK, res)
 }

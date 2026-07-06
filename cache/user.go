@@ -7,6 +7,9 @@ import (
 )
 
 func (c *Cache) GetUser(id uuid.UUID) *User {
+	if c == nil {
+		return nil
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	user, ok := c.Users[id]
@@ -18,11 +21,17 @@ func (c *Cache) GetUser(id uuid.UUID) *User {
 	return &user.User
 }
 func (c *Cache) DeleteUser(id uuid.UUID) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.Users, id)
 }
 func (c *Cache) SetUser(id uuid.UUID, user User) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Users[id] = UserCache{

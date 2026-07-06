@@ -7,6 +7,9 @@ import (
 )
 
 func (c *Cache) SetEvent(id uuid.UUID, event Event) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Events[id] = EventCache{
@@ -15,6 +18,9 @@ func (c *Cache) SetEvent(id uuid.UUID, event Event) {
 	}
 }
 func (c *Cache) GetEvent(id uuid.UUID) *Event {
+	if c == nil {
+		return nil
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	event, ok := c.Events[id]
@@ -26,6 +32,9 @@ func (c *Cache) GetEvent(id uuid.UUID) *Event {
 	return &event.Event
 }
 func (c *Cache) DeleteEvent(id uuid.UUID) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.Events, id)

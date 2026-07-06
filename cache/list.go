@@ -3,6 +3,9 @@ package cache
 import "time"
 
 func (c *Cache) GetList(key string) any {
+	if c == nil {
+		return nil
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	list, ok := c.Lists[key]
@@ -15,6 +18,9 @@ func (c *Cache) GetList(key string) any {
 }
 
 func (c *Cache) SetList(key string, data any) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Lists[key] = ListCache{
@@ -24,6 +30,9 @@ func (c *Cache) SetList(key string, data any) {
 }
 
 func (c *Cache) DeleteList(key string) {
+	if c == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.Lists, key)

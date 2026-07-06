@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Blue-Onion/ArtmeisterBackend/cache"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler/logger"
 	"github.com/Blue-Onion/ArtmeisterBackend/internal/database"
@@ -14,10 +15,12 @@ import (
 )
 
 type UserHandler struct {
-	Repo database.UserRepository
+	Repo  database.UserRepository
+	Cache *cache.Cache
 }
 type ArtHandler struct {
-	Repo database.ArtRepository
+	Repo  database.ArtRepository
+	Cache *cache.Cache
 }
 
 // TODO(Cache): UpdateArtStatus in cache. Invalidate approved art list and pending art list caches.
@@ -63,6 +66,10 @@ func (h *ArtHandler) HandlerArtStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if log != nil {
 		log.Info(fmt.Sprintf("HandlerArtStatus: art %s status updated to %s", id, status))
+	}
+	if h.Cache != nil {
+		h.Cache.DeleteArt(id)
+		h.Cache.DeleteList("approved_arts")
 	}
 	handler.RespondWithJson(w, http.StatusOK, art)
 }
@@ -140,6 +147,9 @@ func (h *UserHandler) HandlerRole(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandlerRole: updated user %s", id))
 	}
-
+	if h.Cache != nil {
+		h.Cache.DeleteUser(id)
+		h.Cache.DeleteList("approved_users")
+	}
 	handler.RespondWithJson(w, http.StatusOK, user)
 }
