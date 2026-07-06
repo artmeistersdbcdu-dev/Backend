@@ -14,6 +14,7 @@ type Cache struct {
 	Users  map[uuid.UUID]UserCache
 	Events map[uuid.UUID]EventCache
 	Arts   map[uuid.UUID]ArtCache
+	Lists  map[string]ListCache
 }
 
 var (
@@ -27,6 +28,7 @@ func LoadCache() *Cache {
 			Users:  make(map[uuid.UUID]UserCache),
 			Events: make(map[uuid.UUID]EventCache),
 			Arts:   make(map[uuid.UUID]ArtCache),
+			Lists:  make(map[string]ListCache),
 		}
 	})
 	return cache
@@ -39,6 +41,7 @@ func (c *Cache) cleanUp() {
 		c.EventCleanUp(curr)
 		c.ArtCleanUp(curr)
 		c.UserCleanUp(curr)
+		c.ListCleanUp(curr)
 		c.mu.Unlock()
 	}
 }

@@ -19,6 +19,10 @@ type Handler struct {
 	Repo database.ArtMetaDataRepository
 }
 
+// TODO(Cache): Cache comments list by art_id UUID (T1 route).
+// Cache Miss -> DB GetArtCommentsByArtID, Set cache.
+// Cache Hit -> Return cached list.
+// Invalidate when comment is added or deleted for this art.
 func (h *Handler) HandleGetArtComments(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
@@ -43,6 +47,10 @@ func (h *Handler) HandleGetArtComments(w http.ResponseWriter, r *http.Request) {
 	}
 	handler.RespondWithJson(w, http.StatusOK, comments)
 }
+// TODO(Cache): Cache comment count by art_id UUID (T1 route).
+// Cache Miss -> DB GetArtCommentsCount, Set cache.
+// Cache Hit -> Return cached count.
+// Invalidate when comment is added or deleted for this art.
 func (h *Handler) HandleGetArtCommentsCount(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
@@ -67,6 +75,10 @@ func (h *Handler) HandleGetArtCommentsCount(w http.ResponseWriter, r *http.Reque
 	}
 	handler.RespondWithJson(w, http.StatusOK, commentsCount)
 }
+// TODO(Cache): Cache like count by art_id UUID (T1 route).
+// Cache Miss -> DB GetArtLikesCount, Set cache.
+// Cache Hit -> Return cached count.
+// Invalidate when art is liked or unliked.
 func (h *Handler) HandleGetArtLikeCount(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
@@ -91,6 +103,7 @@ func (h *Handler) HandleGetArtLikeCount(w http.ResponseWriter, r *http.Request) 
 	}
 	handler.RespondWithJson(w, http.StatusOK, likeCount)
 }
+// TODO(Cache): Invalidate art comments cache and comment count cache for the associated art.
 func (h *Handler) HandleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -132,6 +145,7 @@ func (h *Handler) HandleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	}
 	handler.RespondWithJson(w, http.StatusOK, "Deleted Successfully")
 }
+// TODO(Cache): Invalidate art comments cache and comment count cache for this art_id.
 func (h *Handler) HandleComment(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -182,6 +196,7 @@ func (h *Handler) HandleComment(w http.ResponseWriter, r *http.Request) {
 	}
 	handler.RespondWithJson(w, http.StatusOK, comment)
 }
+// TODO(Cache): Invalidate like count cache for this art_id.
 func (h *Handler) HandleLike(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -221,6 +236,7 @@ func (h *Handler) HandleLike(w http.ResponseWriter, r *http.Request) {
 	}
 	handler.RespondWithJson(w, http.StatusOK, comment)
 }
+// TODO(Cache): Invalidate like count cache for this art_id.
 func (h *Handler) HandleUnLike(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())

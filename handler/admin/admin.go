@@ -20,6 +20,7 @@ type ArtHandler struct {
 	Repo database.ArtRepository
 }
 
+// TODO(Cache): UpdateArtStatus in cache. Invalidate approved art list and pending art list caches.
 func (h *ArtHandler) HandlerArtStatus(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	_, ok := middleware.GetModerator(r.Context())
@@ -65,6 +66,7 @@ func (h *ArtHandler) HandlerArtStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	handler.RespondWithJson(w, http.StatusOK, art)
 }
+// TODO(Cache): UpdateUser in cache (status, role changed). Invalidate core members and approved user list caches.
 func (h *UserHandler) HandlerRole(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	actor, ok := middleware.GetSenior(r.Context())

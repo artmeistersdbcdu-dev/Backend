@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Blue-Onion/ArtmeisterBackend/cache"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler/logger"
 	"github.com/Blue-Onion/ArtmeisterBackend/internal/database"
@@ -18,12 +19,14 @@ import (
 )
 
 type EventHandler struct {
-	Repo database.EventRepository
+	Repo  database.EventRepository
+	Cache *cache.Cache
 }
 type EventAttendeeHandler struct {
 	Repo database.EventAttendeesRepository
 }
 
+// TODO(Cache): SetEvent after creation. Invalidate event list cache.
 func (h *EventHandler) HandleCreateEvent(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	err := r.ParseMultipartForm(20 << 20)
@@ -93,6 +96,7 @@ func (h *EventHandler) HandleCreateEvent(w http.ResponseWriter, r *http.Request)
 	}
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": res.String()})
 }
+// TODO(Cache): DeleteEvent from cache. Invalidate event list cache.
 func (h *EventHandler) HandleDeleteEvent(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
@@ -118,6 +122,8 @@ func (h *EventHandler) HandleDeleteEvent(w http.ResponseWriter, r *http.Request)
 	}
 	handler.RespondWithJson(w, http.StatusOK, "ok")
 }
+// TODO(Cache): Cache Event by UUID (already reads cache. SetEvent on cache miss).
+// Update cache after successful PATCH. Delete cache after DELETE.
 func (h *EventHandler) HandleGetEventById(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
@@ -127,6 +133,21 @@ func (h *EventHandler) HandleGetEventById(w http.ResponseWriter, r *http.Request
 			log.Error(fmt.Sprintf("HandleGetEventById: invalid ID format '%s': %v", id, err))
 		}
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	eventCache := h.Cache.GetEvent(eventId)
+	if eventCache != nil {
+		event := database.GetEventByIDRow{
+			ID:          eventId,
+			Name:        eventCache.Name,
+			Description: eventCache.Description,
+			Venue:       eventCache.Venue,
+			Image:       eventCache.Image,
+			BannerImage: eventCache.BannerImage,
+			EventDate:   eventCache.EventDate,
+			Status:      database.ModeOfConduct(eventCache.Status),
+		}
+		handler.RespondWithJson(w, http.StatusOK, event)
 		return
 	}
 	res, err := h.Repo.GetEventByID(r.Context(), eventId)
@@ -142,6 +163,10 @@ func (h *EventHandler) HandleGetEventById(w http.ResponseWriter, r *http.Request
 	}
 	handler.RespondWithJson(w, http.StatusOK, res)
 }
+// TODO(Cache): HIGH VALUE. Cache event list (T1 route).
+// Cache Miss -> DB ListEvents, Set cache with list key.
+// Cache Hit -> Return cached list.
+// Invalidate when event is created, updated, or deleted.
 func (h *EventHandler) HandleGetAllEvent(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	res, err := h.Repo.ListEvents(r.Context())
@@ -157,6 +182,7 @@ func (h *EventHandler) HandleGetAllEvent(w http.ResponseWriter, r *http.Request)
 	}
 	handler.RespondWithJson(w, http.StatusOK, res)
 }
+// TODO(Cache): UpdateEvent in cache. Invalidate event list cache.
 func (h *EventHandler) HandleUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 
@@ -237,6 +263,8 @@ func (h *EventHandler) HandleUpdateEvent(w http.ResponseWriter, r *http.Request)
 
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": res.String()})
 }
+// TODO(Cache): Invalidate attendees list cache for this event_id.
+// Optionally invalidate user's my-events cache.
 func (h *EventAttendeeHandler) HandleJoinEvent(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, _ := middleware.GetUser(r.Context())
@@ -268,6 +296,8 @@ func (h *EventAttendeeHandler) HandleJoinEvent(w http.ResponseWriter, r *http.Re
 	}
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": res.String()})
 }
+// TODO(Cache): Invalidate attendees list cache for this event_id.
+// Optionally invalidate user's my-events cache.
 func (h *EventAttendeeHandler) HandleDeleteEventAttendee(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 
@@ -310,6 +340,10 @@ func (h *EventAttendeeHandler) HandleDeleteEventAttendee(w http.ResponseWriter, 
 	}
 	handler.RespondWithJson(w, http.StatusOK, "ok")
 }
+// TODO(Cache): Cache attendees list by event_id UUID (T2 route).
+// Cache Miss -> DB ListEventAttendees, Set cache.
+// Cache Hit -> Return cached list.
+// Invalidate when user joins or leaves the event.
 func (h *EventAttendeeHandler) HandleAllEventAttendee(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
@@ -335,6 +369,7 @@ func (h *EventAttendeeHandler) HandleAllEventAttendee(w http.ResponseWriter, r *
 	}
 	handler.RespondWithJson(w, http.StatusOK, res)
 }
+// TODO(Cache): Low value (T3, existence check). Skip cache or use short TTL.
 func (h *EventAttendeeHandler) HandleGetMyEvent(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, _ := middleware.GetUser(r.Context())
@@ -366,6 +401,10 @@ func (h *EventAttendeeHandler) HandleGetMyEvent(w http.ResponseWriter, r *http.R
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": res.String()})
 }
 
+// TODO(Cache): Cache user's event list by user_id UUID.
+// Cache Miss -> DB ListMyEvents, Set cache.
+// Cache Hit -> Return cached list.
+// Invalidate when user joins or leaves an event.
 func (h *EventAttendeeHandler) HandleGetMyAllEvent(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, _ := middleware.GetUser(r.Context())

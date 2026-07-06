@@ -8,21 +8,17 @@ import (
 )
 
 type User struct {
-	Name              string
-	Username          sql.NullString
-	Password          string
-	Email             string
-	Description       sql.NullString
-	BannerImage       sql.NullString
-	Image             sql.NullString
-	Batch             sql.NullString
-	SocialLinks       json.RawMessage
-	Status            string
-	Role              string
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	ResetToken        sql.NullString
-	ResetTokenExpires sql.NullTime
+	Name        string
+	Username    sql.NullString
+	Password    string
+	Email       string
+	Description sql.NullString
+	BannerImage sql.NullString
+	Image       sql.NullString
+	Batch       sql.NullString
+	SocialLinks json.RawMessage
+	Status      string
+	Role        string
 }
 type Art struct {
 	Name        string
@@ -31,8 +27,6 @@ type Art struct {
 	Tags        []string
 	Status      string
 	UserID      uuid.UUID
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
 }
 type Event struct {
 	Name        string
@@ -42,8 +36,6 @@ type Event struct {
 	BannerImage sql.NullString
 	EventDate   time.Time
 	Status      string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
 }
 
 type EventAttendee struct {
@@ -61,5 +53,9 @@ type ArtCache struct {
 }
 type UserCache struct {
 	User     User
+	ExpireAt time.Time
+}
+type ListCache struct {
+	Data     any
 	ExpireAt time.Time
 }

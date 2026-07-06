@@ -50,13 +50,15 @@ func main() {
 		Repo: apiCfg.UserRepo,
 	}
 	artHanlder := &art.Handler{
-		Repo: apiCfg.ArtRepo,
+		Repo:  apiCfg.ArtRepo,
+		Cache: Cache,
 	}
 	artMetaDataHandler := &artmetadata.Handler{
 		Repo: apiCfg.ArtMetaDataRepo,
 	}
 	eventHandler := &event.EventHandler{
-		Repo: apiCfg.EventRepo,
+		Repo:  apiCfg.EventRepo,
+		Cache: Cache,
 	}
 	eventAttendeeHandler := &event.EventAttendeeHandler{
 		Repo: apiCfg.EventAttendeeRepo,
@@ -89,6 +91,7 @@ func main() {
 	profile := art.ProfileHandler{
 		UserRepo: apiCfg.UserRepo,
 		ArtRepo:  apiCfg.ArtRepo,
+		Cache:    Cache,
 	}
 	artRoute := art.ArtRouter(artHanlder, artMetaDataHandler, middlewareHandler, &profile)
 	router.Mount("/art", artRoute)
