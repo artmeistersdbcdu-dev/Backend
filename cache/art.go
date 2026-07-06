@@ -1,0 +1,53 @@
+package cache
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+func (c *Cache) GetArt(id uuid.UUID) *Art {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	art, ok := c.Arts[id]
+	if !ok {
+		return nil
+	}
+	art.ExpireAt = time.Now().Add(timeInterval)
+	c.Arts[id] = art
+	return &art.Art
+}
+func (c *Cache) DeleteArt(id uuid.UUID) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.Arts, id)
+}
+func (c *Cache) SetArt(id uuid.UUID, art Art) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Arts[id] = ArtCache{
+		Art:      art,
+		ExpireAt: time.Now().Add(timeInterval),
+	}
+
+}
+func (c *Cache) ArtCleanUp(curr time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for id, item := range c.Arts {
+		if !curr.Before(item.ExpireAt) {
+			delete(c.Arts, id)
+		}
+	}
+}

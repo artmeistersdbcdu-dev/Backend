@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Blue-Onion/ArtmeisterBackend/cache"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler/logger"
 	"github.com/Blue-Onion/ArtmeisterBackend/internal/database"
@@ -18,10 +19,14 @@ import (
 )
 
 type Handler struct {
-	Repo database.UserRepository
+	Repo  database.UserRepository
+	Cache *cache.Cache
 }
 
+// TODO(Cache): Cache User by UUID (already reads cache. SetUser on cache miss).
+// Update cache after successful PATCH. Delete cache after role/status change.
 func (h *Handler) HandleGetUserById(w http.ResponseWriter, r *http.Request) {
+
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
 	userId, err := uuid.Parse(id)
@@ -32,6 +37,27 @@ func (h *Handler) HandleGetUserById(w http.ResponseWriter, r *http.Request) {
 		}
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
 		return
+	}
+	userCache := h.Cache.GetUser(userId)
+	if userCache != nil {
+		fmt.Println("Cache BABY")
+		user := database.GetUserRow{
+			ID:          userId,
+			Name:        userCache.Name,
+			Username:    userCache.Username,
+			Email:       userCache.Email,
+			Batch:       userCache.Batch,
+			Status:      database.AccountStatus(userCache.Status),
+			Role:        database.UserRole(userCache.Role),
+			Image:       userCache.Image,
+			BannerImage: userCache.BannerImage,
+			Description: userCache.Description,
+			SocialLinks: userCache.SocialLinks,
+		}
+
+		handler.RespondWithJson(w, http.StatusOK, user)
+		return
+
 	}
 	user, err := h.Repo.GetUser(r.Context(), userId)
 	if err != nil {
@@ -44,10 +70,23 @@ func (h *Handler) HandleGetUserById(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleGetArtById: retrieved art %s successfully", userId))
 	}
+	newCache := cache.User{
+		Name:        user.Name,
+		Description: user.Description,
+		Image:       user.Image,
+		BannerImage: user.BannerImage,
+		SocialLinks: user.SocialLinks,
+		Username:    user.Username,
+		Batch:       user.Batch,
+		Status:      string(user.Status),
+		Role:        string(user.Role),
+	}
+	h.Cache.SetUser(userId, newCache)
 	handler.RespondWithJson(w, http.StatusOK, user)
 
 }
 
+// TODO(Cache): Bypass cache (auth, includes password). Cache could be seeded after login to warm user cache.
 func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	params := model.AuthenticateUser{}
@@ -103,6 +142,22 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleLogin: user %s logged in successfully", user.ID))
 	}
+	// Seed user cache after successful login
+	fullUser, err := h.Repo.GetUser(r.Context(), user.ID)
+	if err == nil {
+		newCache := cache.User{
+			Name:        fullUser.Name,
+			Description: fullUser.Description,
+			Image:       fullUser.Image,
+			BannerImage: fullUser.BannerImage,
+			SocialLinks: fullUser.SocialLinks,
+			Username:    fullUser.Username,
+			Batch:       fullUser.Batch,
+			Status:      string(fullUser.Status),
+			Role:        string(fullUser.Role),
+		}
+		h.Cache.SetUser(user.ID, newCache)
+	}
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{
 		"id":    user.ID.String(),
 		"name":  user.Name,
@@ -111,6 +166,7 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// TODO(Cache): Cache User by UUID (already reads cache via GetUser). SetUser on cache miss.
 func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
 	tokenCookie, err := r.Cookie("authToken")
 	if err != nil {
@@ -134,14 +190,49 @@ func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userCache := h.Cache.GetUser(id)
+	if userCache != nil {
+		fmt.Println("Cache BABY")
+		user := database.GetUserRow{
+			ID:          id,
+			Name:        userCache.Name,
+			Username:    userCache.Username,
+			Email:       userCache.Email,
+			Batch:       userCache.Batch,
+			Status:      database.AccountStatus(userCache.Status),
+			Role:        database.UserRole(userCache.Role),
+			Image:       userCache.Image,
+			BannerImage: userCache.BannerImage,
+			Description: userCache.Description,
+			SocialLinks: userCache.SocialLinks,
+		}
+
+		handler.RespondWithJson(w, http.StatusOK, user)
+		return
+
+	}
 	user, err := h.Repo.GetUser(r.Context(), id)
 	if err != nil {
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
 		return
 	}
+	newCache := cache.User{
+		Name:        user.Name,
+		Description: user.Description,
+		Image:       user.Image,
+		BannerImage: user.BannerImage,
+		SocialLinks: user.SocialLinks,
+		Username:    user.Username,
+		Batch:       user.Batch,
+		Status:      string(user.Status),
+		Role:        string(user.Role),
+	}
+	h.Cache.SetUser(id, newCache)
 	handler.RespondWithJson(w, 200, user)
 
 }
+
+// TODO(Cache): No DB query. Skip cache.
 func (h *Handler) HandleLogOut(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	http.SetCookie(w, &http.Cookie{
@@ -161,6 +252,7 @@ func (h *Handler) HandleLogOut(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// TODO(Cache): Invalidate user list caches (approved users, core members) after creation.
 func (h *Handler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	param := model.CreateUser{}
@@ -217,9 +309,11 @@ func (h *Handler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   3600 * 24,
 	})
 
+	h.Cache.DeleteList("approved_users")
 	handler.RespondWithJson(w, http.StatusCreated, map[string]string{"ID": userID.String()})
 }
 
+// TODO(Cache): UpdateUser in cache after successful PATCH. Invalidate user list caches (approved, core).
 func (h *Handler) HandleUpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -290,9 +384,23 @@ func (h *Handler) HandleUpdateUserProfile(w http.ResponseWriter, r *http.Request
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleUpdateUserProfile: profile updated for user %s", userId))
 	}
+	newCache := cache.User{
+		Name:        updatedUser.Name,
+		Description: updatedUser.Description,
+		Image:       updatedUser.Image,
+		BannerImage: updatedUser.BannerImage,
+		SocialLinks: updatedUser.SocialLinks,
+		Username:    updatedUser.Username,
+		Batch:       updatedUser.Batch,
+		Status:      string(updatedUser.Status),
+		Role:        string(updatedUser.Role),
+	}
+	h.Cache.SetUser(userId, newCache)
+	h.Cache.DeleteList("approved_users")
 	handler.RespondWithJson(w, http.StatusOK, updatedUser)
 }
 
+// TODO(Cache): Low value. Could invalidate user cache, but password is not cached.
 func (h *Handler) HandlePasswordChange(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -366,6 +474,7 @@ func (h *Handler) HandlePasswordChange(w http.ResponseWriter, r *http.Request) {
 	handler.RespondWithJson(w, http.StatusOK, res)
 }
 
+// TODO(Cache): Low value (admin T5). Skip cache or use short TTL.
 func (h *Handler) HandleGetAllUser(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 
@@ -382,6 +491,8 @@ func (h *Handler) HandleGetAllUser(w http.ResponseWriter, r *http.Request) {
 	}
 	handler.RespondWithJson(w, http.StatusOK, user)
 }
+
+// TODO(Cache): Unused route (no router registration). Skip.
 func (h *Handler) HandleGetUserByUserName(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	username := chi.URLParam(r, "user-name")
@@ -409,8 +520,19 @@ func (h *Handler) HandleGetUserByUserName(w http.ResponseWriter, r *http.Request
 	}
 	handler.RespondWithJson(w, http.StatusOK, user)
 }
+
+// TODO(Cache): Cache approved user list (T2 route).
+// Cache Miss -> DB GetAllUserApproved, Set cache with list key.
+// Cache Hit -> Return cached list.
+// Invalidate when user is created, approved, role changes, or is banned.
 func (h *Handler) HandleGetApprovedUser(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
+	cached := h.Cache.GetList("approved_users")
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, http.StatusOK, cached)
+		return
+	}
 	user, err := h.Repo.GetAllUserApproved(r.Context())
 	if err != nil {
 		if log != nil {
@@ -422,10 +544,45 @@ func (h *Handler) HandleGetApprovedUser(w http.ResponseWriter, r *http.Request) 
 	if log != nil {
 		log.Info("HandleGetAllUser: successfully")
 	}
+	h.Cache.SetList("approved_users", user)
 	handler.RespondWithJson(w, http.StatusOK, user)
 }
+
+// TODO(Cache): Implement caching for GET /core-member using list cache.
+//
+// CacheKey: "core_members"
+//
+// Plan:
+//   1. Check h.Cache.GetList("core_members")
+//      - If hit, return cached data immediately.
+//   2. On miss, call h.Repo.GetCoreMembers(ctx)
+//   3. Store result via h.Cache.SetList("core_members", users)
+//   4. Return fresh data.
+//
+// Invalidation triggers (in HandlerRole admin):
+//   - User role changes (member <-> core_member/vp/president)
+//   - User status changes (e.g., banned)
+//
+// Invalidation: h.Cache.DeleteList("core_members")
+//
+// GetCoreMembersRow (sqlc generated in internal/database/user.sql.go):
+//   type GetCoreMembersRow struct {
+//       ID          uuid.UUID
+//       Name        string
+//       Email       string
+//       Status      AccountStatus
+//       Role        UserRole
+//       Image       sql.NullString
+//       SocialLinks json.RawMessage
+//   }
 func (h *Handler) HandleGetCoreMember(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
+	cached := h.Cache.GetList("core_members")
+	if cached != nil {
+		fmt.Println("Cache baby")
+		handler.RespondWithJson(w, http.StatusOK, cached)
+		return
+	}
 	user, err := h.Repo.GetCoreMembers(r.Context())
 	if err != nil {
 		if log != nil {
@@ -437,5 +594,6 @@ func (h *Handler) HandleGetCoreMember(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info("HandleGetAllUser: successfully")
 	}
+	h.Cache.SetList("core_members", user)
 	handler.RespondWithJson(w, http.StatusOK, user)
 }

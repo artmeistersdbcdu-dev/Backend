@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Blue-Onion/ArtmeisterBackend/cache"
 	"github.com/Blue-Onion/ArtmeisterBackend/config"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler/admin"
@@ -38,21 +39,26 @@ func main() {
 	if err != nil {
 		log.Fatalf("Couldn't intialize Logger: %v", err)
 	}
+	Cache := cache.LoadCache()
+
 	//Handlers
 	userHandler := &user.Handler{
-		Repo: apiCfg.UserRepo,
+		Repo:  apiCfg.UserRepo,
+		Cache: Cache,
 	}
 	middlewareHandler := &middleware.Handler{
 		Repo: apiCfg.UserRepo,
 	}
 	artHanlder := &art.Handler{
-		Repo: apiCfg.ArtRepo,
+		Repo:  apiCfg.ArtRepo,
+		Cache: Cache,
 	}
 	artMetaDataHandler := &artmetadata.Handler{
 		Repo: apiCfg.ArtMetaDataRepo,
 	}
 	eventHandler := &event.EventHandler{
-		Repo: apiCfg.EventRepo,
+		Repo:  apiCfg.EventRepo,
+		Cache: Cache,
 	}
 	eventAttendeeHandler := &event.EventAttendeeHandler{
 		Repo: apiCfg.EventAttendeeRepo,
@@ -85,6 +91,7 @@ func main() {
 	profile := art.ProfileHandler{
 		UserRepo: apiCfg.UserRepo,
 		ArtRepo:  apiCfg.ArtRepo,
+		Cache:    Cache,
 	}
 	artRoute := art.ArtRouter(artHanlder, artMetaDataHandler, middlewareHandler, &profile)
 	router.Mount("/art", artRoute)

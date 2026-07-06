@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Blue-Onion/ArtmeisterBackend/cache"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler/logger"
 	"github.com/Blue-Onion/ArtmeisterBackend/internal/database"
@@ -16,9 +17,14 @@ import (
 )
 
 type Handler struct {
-	Repo database.ArtMetaDataRepository
+	Repo  database.ArtMetaDataRepository
+	Cache *cache.Cache
 }
 
+// TODO(Cache): Cache comments list by art_id UUID (T1 route).
+// Cache Miss -> DB GetArtCommentsByArtID, Set cache.
+// Cache Hit -> Return cached list.
+// Invalidate when comment is added or deleted for this art.
 func (h *Handler) HandleGetArtComments(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
@@ -28,6 +34,13 @@ func (h *Handler) HandleGetArtComments(w http.ResponseWriter, r *http.Request) {
 			log.Error(fmt.Sprintf("HandleGetArtComments: invalid art ID format '%s': %v", id, err))
 		}
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	cacheKey := "art_comments:" + artId.String()
+	cached := h.Cache.GetList(cacheKey)
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, http.StatusOK, cached)
 		return
 	}
 	comments, err := h.Repo.GetArtCommentsByArtID(r.Context(), artId)
@@ -41,8 +54,13 @@ func (h *Handler) HandleGetArtComments(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleGetArtComments: retrieved comments for art %s successfully", artId))
 	}
+	h.Cache.SetList(cacheKey, comments)
 	handler.RespondWithJson(w, http.StatusOK, comments)
 }
+// TODO(Cache): Cache comment count by art_id UUID (T1 route).
+// Cache Miss -> DB GetArtCommentsCount, Set cache.
+// Cache Hit -> Return cached count.
+// Invalidate when comment is added or deleted for this art.
 func (h *Handler) HandleGetArtCommentsCount(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
@@ -52,6 +70,13 @@ func (h *Handler) HandleGetArtCommentsCount(w http.ResponseWriter, r *http.Reque
 			log.Error(fmt.Sprintf("HandleGetArtCommentsCount: invalid art ID format '%s': %v", id, err))
 		}
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	cacheKey := "art_comment_count:" + artId.String()
+	cached := h.Cache.GetList(cacheKey)
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, http.StatusOK, cached)
 		return
 	}
 	commentsCount, err := h.Repo.GetArtCommentsCount(r.Context(), artId)
@@ -65,8 +90,13 @@ func (h *Handler) HandleGetArtCommentsCount(w http.ResponseWriter, r *http.Reque
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleGetArtCommentsCount: retrieved comments count for art %s successfully", artId))
 	}
+	h.Cache.SetList(cacheKey, commentsCount)
 	handler.RespondWithJson(w, http.StatusOK, commentsCount)
 }
+// TODO(Cache): Cache like count by art_id UUID (T1 route).
+// Cache Miss -> DB GetArtLikesCount, Set cache.
+// Cache Hit -> Return cached count.
+// Invalidate when art is liked or unliked.
 func (h *Handler) HandleGetArtLikeCount(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
@@ -76,6 +106,13 @@ func (h *Handler) HandleGetArtLikeCount(w http.ResponseWriter, r *http.Request) 
 			log.Error(fmt.Sprintf("HandleGetArtLikeCount: invalid art ID format '%s': %v", id, err))
 		}
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	cacheKey := "art_like_count:" + artId.String()
+	cached := h.Cache.GetList(cacheKey)
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, http.StatusOK, cached)
 		return
 	}
 	likeCount, err := h.Repo.GetArtLikesCount(r.Context(), artId)
@@ -89,8 +126,10 @@ func (h *Handler) HandleGetArtLikeCount(w http.ResponseWriter, r *http.Request) 
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleGetArtLikeCount: retrieved likes count for art %s successfully", artId))
 	}
+	h.Cache.SetList(cacheKey, likeCount)
 	handler.RespondWithJson(w, http.StatusOK, likeCount)
 }
+// TODO(Cache): Invalidate art comments cache and comment count cache for the associated art.
 func (h *Handler) HandleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -132,6 +171,7 @@ func (h *Handler) HandleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	}
 	handler.RespondWithJson(w, http.StatusOK, "Deleted Successfully")
 }
+// TODO(Cache): Invalidate art comments cache and comment count cache for this art_id.
 func (h *Handler) HandleComment(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -180,8 +220,11 @@ func (h *Handler) HandleComment(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleComment: comment added on art %s by user %s", artId, userId))
 	}
+	h.Cache.DeleteList("art_comments:" + artId.String())
+	h.Cache.DeleteList("art_comment_count:" + artId.String())
 	handler.RespondWithJson(w, http.StatusOK, comment)
 }
+// TODO(Cache): Invalidate like count cache for this art_id.
 func (h *Handler) HandleLike(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -219,8 +262,10 @@ func (h *Handler) HandleLike(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleLike: art %s liked by user %s", artId, userId))
 	}
+	h.Cache.DeleteList("art_like_count:" + artId.String())
 	handler.RespondWithJson(w, http.StatusOK, comment)
 }
+// TODO(Cache): Invalidate like count cache for this art_id.
 func (h *Handler) HandleUnLike(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -262,5 +307,6 @@ func (h *Handler) HandleUnLike(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleUnLike: art %s unliked by user %s", artId, userId))
 	}
+	h.Cache.DeleteList("art_like_count:" + artId.String())
 	handler.RespondWithJson(w, http.StatusOK, "Ok")
 }

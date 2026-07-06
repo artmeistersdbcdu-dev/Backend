@@ -3,6 +3,9 @@ package art
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+
+	"github.com/Blue-Onion/ArtmeisterBackend/cache"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler/logger"
 	"github.com/Blue-Onion/ArtmeisterBackend/internal/database"
@@ -11,15 +14,16 @@ import (
 	"github.com/Blue-Onion/ArtmeisterBackend/utlis"
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
-	"net/http"
 )
 
 type Handler struct {
-	Repo database.ArtRepository
+	Repo  database.ArtRepository
+	Cache *cache.Cache
 }
 type ProfileHandler struct {
 	ArtRepo  database.ArtRepository
 	UserRepo database.UserRepository
+	Cache    *cache.Cache
 }
 
 type profile struct {
@@ -27,6 +31,7 @@ type profile struct {
 	Art  []database.GetArtByUserRow
 }
 
+// TODO(Cache): SetArt after creation. Invalidate art list caches (approved, user's gallery).
 func (h *Handler) HandleArtCreation(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 
@@ -103,7 +108,6 @@ func (h *Handler) HandleArtCreation(w http.ResponseWriter, r *http.Request) {
 		UserID:      user.ID,
 		Image:       req.URL,
 	}
-
 	if log != nil {
 		log.Info(fmt.Sprintf(
 			"HandleArtCreation: creating art %s for user %s",
@@ -134,8 +138,22 @@ func (h *Handler) HandleArtCreation(w http.ResponseWriter, r *http.Request) {
 		))
 	}
 
+	artCache := cache.Art{
+		Name:        params.Name,
+		Description: params.Description,
+		Tags:        params.Tags,
+		UserID:      user.ID,
+		Image:       params.Image,
+	}
+	h.Cache.SetArt(id, artCache)
+	h.Cache.DeleteList("approved_arts")
+	h.Cache.DeleteList("user_arts:" + user.ID.String())
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": artID.String()})
 }
+// TODO(Cache): Cache arts list by user_id UUID.
+// Cache Miss -> DB GetArtByUser, Set cache.
+// Cache Hit -> Return cached list.
+// Invalidate when art is created, updated, or deleted for this user.
 func (h *Handler) HandleGetArts(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	userId := chi.URLParam(r, "user_id")
@@ -154,7 +172,13 @@ func (h *Handler) HandleGetArts(w http.ResponseWriter, r *http.Request) {
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
 		return
 	}
-	fmt.Println("Got here")
+	cacheKey := "user_arts:" + id.String()
+	cached := h.Cache.GetList(cacheKey)
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, http.StatusOK, cached)
+		return
+	}
 	arts, err := h.Repo.GetArtByUser(r.Context(), id)
 	if err != nil {
 		if log != nil {
@@ -166,8 +190,12 @@ func (h *Handler) HandleGetArts(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleGetArts: retrieved arts for user %s successfully", id))
 	}
+	h.Cache.SetList(cacheKey, arts)
 	handler.RespondWithJson(w, http.StatusOK, arts)
 }
+// TODO(Cache): Cache Art by UUID. cache.Art struct exists but is never read.
+// Cache Hit -> Return cached art. Cache Miss -> DB GetArtByID, SetArt.
+// Invalidate cache on PATCH or DELETE.
 func (h *Handler) HandleGetArtById(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	artid := chi.URLParam(r, "id")
@@ -187,6 +215,19 @@ func (h *Handler) HandleGetArtById(w http.ResponseWriter, r *http.Request) {
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
 		return
 	}
+	artCache := h.Cache.GetArt(id)
+	if artCache != nil {
+		fmt.Println("Cache BABY")
+		art := database.GetArtByIDRow{
+			ID:          id,
+			Name:        artCache.Name,
+			Description: artCache.Description,
+			Image:       artCache.Image,
+			Tags:        artCache.Tags,
+		}
+		handler.RespondWithJson(w, http.StatusOK, art)
+		return
+	}
 	arts, err := h.Repo.GetArtByID(r.Context(), id)
 	if err != nil {
 		if log != nil {
@@ -198,15 +239,25 @@ func (h *Handler) HandleGetArtById(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleGetArts: retrieved arts for user %s successfully", id))
 	}
+	newCache := cache.Art{
+		Name:        arts.Name,
+		Description: arts.Description,
+		Image:       arts.Image,
+		Tags:        arts.Tags,
+	}
+	h.Cache.SetArt(id, newCache)
 	handler.RespondWithJson(w, http.StatusOK, arts)
 }
+
+// TODO(Cache): Cache art profile by composite key (art_id + user_id).
+// Cache Miss -> DB GetArtProfileByID, Set cache.
+// Cache Hit -> Return cached joined result.
+// Invalidate when art is updated or deleted.
 func (h *Handler) HandleGetArtProfileById(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Got here")
 	log, _ := logger.GetLogger()
 	Id := chi.URLParam(r, "id")
 	usrId := chi.URLParam(r, "user_id")
 	if Id == "" {
-		fmt.Println("Error here 1")
 		if log != nil {
 			log.Error("HandleGetArtById: art ID is empty")
 		}
@@ -215,7 +266,6 @@ func (h *Handler) HandleGetArtProfileById(w http.ResponseWriter, r *http.Request
 	}
 	artId, err := uuid.Parse(Id)
 	if err != nil {
-		fmt.Println("Error here 2")
 		if log != nil {
 			log.Error(fmt.Sprintf("HandleGetArtById: invalid art ID format '%s': %v", Id, err))
 		}
@@ -224,11 +274,17 @@ func (h *Handler) HandleGetArtProfileById(w http.ResponseWriter, r *http.Request
 	}
 	userId, err := uuid.Parse(usrId)
 	if err != nil {
-		fmt.Println("Error here 3")
 		if log != nil {
 			log.Error(fmt.Sprintf("HandleGetArtById: invalid user ID format '%s': %v", usrId, err))
 		}
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	cacheKey := "art_profile:" + artId.String() + ":" + userId.String()
+	cached := h.Cache.GetList(cacheKey)
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, http.StatusOK, cached)
 		return
 	}
 	params := database.GetArtProfileByIDParams{
@@ -238,8 +294,6 @@ func (h *Handler) HandleGetArtProfileById(w http.ResponseWriter, r *http.Request
 	art, err := h.Repo.GetArtProfileByID(r.Context(), params)
 
 	if err != nil {
-
-		fmt.Println("Error here 3")
 		if log != nil {
 			log.Error(fmt.Sprintf("HandleGetArtById: failed to get art %s: %v", artId, err))
 		}
@@ -249,8 +303,10 @@ func (h *Handler) HandleGetArtProfileById(w http.ResponseWriter, r *http.Request
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleGetArtById: retrieved art %s successfully", artId))
 	}
+	h.Cache.SetList(cacheKey, art)
 	handler.RespondWithJson(w, http.StatusOK, art)
 }
+// TODO(Cache): DeleteArt from cache. Invalidate art list caches (approved, user's gallery).
 func (h *Handler) HandleArtDeletion(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -296,9 +352,13 @@ func (h *Handler) HandleArtDeletion(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandleArtDeletion: art %s deleted by user %s", artId, user.ID))
 	}
+	h.Cache.DeleteArt(artId)
+	h.Cache.DeleteList("approved_arts")
+	h.Cache.DeleteList("user_arts:" + user.ID.String())
 	handler.RespondWithJson(w, http.StatusOK, "Art Work Deleted")
 
 }
+// TODO(Cache): UpdateArt in cache after successful PATCH. Invalidate art list caches.
 func (h *Handler) HandlerArtUpdation(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	user, ok := middleware.GetUser(r.Context())
@@ -363,8 +423,15 @@ func (h *Handler) HandlerArtUpdation(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info(fmt.Sprintf("HandlerArtUpdation: art %s updated by user %s", artId, user.ID))
 	}
+	h.Cache.DeleteArt(artId)
+	h.Cache.DeleteList("approved_arts")
+	h.Cache.DeleteList("user_arts:" + user.ID.String())
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": updatedWork.String()})
 }
+// TODO(Cache): Cache composite profile (User + Arts) by user_id UUID.
+// Cache Miss -> DB GetUser + GetArtByUser (2 calls), Set cache.
+// Cache Hit -> Return cached composite.
+// Invalidate when user profile or their arts change.
 func (h *ProfileHandler) HandlerGetArtistProfile(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	userId := chi.URLParam(r, "id")
@@ -381,6 +448,13 @@ func (h *ProfileHandler) HandlerGetArtistProfile(w http.ResponseWriter, r *http.
 			log.Error(fmt.Sprintf("HandleGetArtById: invalid art ID format '%s': %v", Id, err))
 		}
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	cacheKey := "artist_profile:" + Id.String()
+	cached := h.Cache.GetList(cacheKey)
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, 200, cached)
 		return
 	}
 	user, err := h.UserRepo.GetUser(r.Context(), Id)
@@ -403,8 +477,10 @@ func (h *ProfileHandler) HandlerGetArtistProfile(w http.ResponseWriter, r *http.
 		User: user,
 		Art:  artWork,
 	}
+	h.Cache.SetList(cacheKey, res)
 	handler.RespondWithJson(w, 200, res)
 }
+// TODO(Cache): Low value (admin T5). Skip cache or use short TTL.
 func (h *Handler) HandleGetPendingArt(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	arts, err := h.Repo.ListPendingArt(r.Context())
@@ -420,8 +496,19 @@ func (h *Handler) HandleGetPendingArt(w http.ResponseWriter, r *http.Request) {
 	}
 	handler.RespondWithJson(w, http.StatusOK, arts)
 }
+
+// TODO(Cache): HIGH VALUE. Cache approved art list (homepage T1).
+// Cache Miss -> DB ListArt, Set cache with list key.
+// Cache Hit -> Return cached list.
+// Invalidate when art is created, status changes, or art is deleted.
 func (h *Handler) HandleGetApprovedArt(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
+	cached := h.Cache.GetList("approved_arts")
+	if cached != nil {
+		fmt.Println("Cache BABY")
+		handler.RespondWithJson(w, http.StatusOK, cached)
+		return
+	}
 	arts, err := h.Repo.ListArt(r.Context())
 	if err != nil {
 		if log != nil {
@@ -433,5 +520,6 @@ func (h *Handler) HandleGetApprovedArt(w http.ResponseWriter, r *http.Request) {
 	if log != nil {
 		log.Info("HandleGetPendingArt: retrieved art")
 	}
+	h.Cache.SetList("approved_arts", arts)
 	handler.RespondWithJson(w, http.StatusOK, arts)
 }
