@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Blue-Onion/ArtmeisterBackend/cache"
 	"github.com/Blue-Onion/ArtmeisterBackend/config"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler/admin"
@@ -38,9 +39,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Couldn't intialize Logger: %v", err)
 	}
+	Cache := cache.LoadCache()
+
 	//Handlers
 	userHandler := &user.Handler{
-		Repo: apiCfg.UserRepo,
+		Repo:  apiCfg.UserRepo,
+		Cache: Cache,
 	}
 	middlewareHandler := &middleware.Handler{
 		Repo: apiCfg.UserRepo,

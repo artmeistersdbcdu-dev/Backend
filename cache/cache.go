@@ -36,12 +36,15 @@ func (c *Cache) cleanUp() {
 	for range time.Tick(timeInterval) {
 		curr := time.Now()
 		c.mu.Lock()
-		defer c.mu.Unlock()
 		c.EventCleanUp(curr)
 		c.ArtCleanUp(curr)
 		c.UserCleanUp(curr)
+		c.mu.Unlock()
 	}
 }
 func init() {
+	if cache == nil {
+		return
+	}
 	go cache.cleanUp()
 }

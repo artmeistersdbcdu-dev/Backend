@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Blue-Onion/ArtmeisterBackend/cache"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler"
 	"github.com/Blue-Onion/ArtmeisterBackend/handler/logger"
 	"github.com/Blue-Onion/ArtmeisterBackend/internal/database"
@@ -18,10 +19,12 @@ import (
 )
 
 type Handler struct {
-	Repo database.UserRepository
+	Repo  database.UserRepository
+	Cache *cache.Cache
 }
 
 func (h *Handler) HandleGetUserById(w http.ResponseWriter, r *http.Request) {
+
 	log, _ := logger.GetLogger()
 	id := chi.URLParam(r, "id")
 	userId, err := uuid.Parse(id)
@@ -32,6 +35,26 @@ func (h *Handler) HandleGetUserById(w http.ResponseWriter, r *http.Request) {
 		}
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
 		return
+	}
+	userCache := h.Cache.GetUser(userId)
+	if userCache != nil {
+		user := database.GetUserRow{
+			ID:          userId,
+			Name:        userCache.Name,
+			Username:    userCache.Username,
+			Email:       userCache.Email,
+			Batch:       userCache.Batch,
+			Status:      database.AccountStatus(userCache.Status),
+			Role:        database.UserRole(userCache.Role),
+			Image:       userCache.Image,
+			BannerImage: userCache.BannerImage,
+			Description: userCache.Description,
+			SocialLinks: userCache.SocialLinks,
+		}
+
+		handler.RespondWithJson(w, http.StatusOK, user)
+		return
+
 	}
 	user, err := h.Repo.GetUser(r.Context(), userId)
 	if err != nil {
