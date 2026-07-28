@@ -19,8 +19,10 @@ import (
 )
 
 type Handler struct {
-	Repo  database.UserRepository
-	Cache *cache.Cache
+	Repo      database.UserRepository
+	ArtRepo   database.ArtRepository
+	EventRepo database.EventRepository
+	Cache     *cache.Cache
 }
 
 // TODO(Cache): Cache User by UUID (already reads cache. SetUser on cache miss).
@@ -310,6 +312,7 @@ func (h *Handler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.Cache.DeleteList("approved_users")
+	h.Cache.DeleteList("homepage")
 	handler.RespondWithJson(w, http.StatusCreated, map[string]string{"ID": userID.String()})
 }
 
@@ -397,6 +400,7 @@ func (h *Handler) HandleUpdateUserProfile(w http.ResponseWriter, r *http.Request
 	}
 	h.Cache.SetUser(userId, newCache)
 	h.Cache.DeleteList("approved_users")
+	h.Cache.DeleteList("homepage")
 	handler.RespondWithJson(w, http.StatusOK, updatedUser)
 }
 
@@ -548,52 +552,46 @@ func (h *Handler) HandleGetApprovedUser(w http.ResponseWriter, r *http.Request) 
 	handler.RespondWithJson(w, http.StatusOK, user)
 }
 
-// TODO(Cache): Implement caching for GET /core-member using list cache.
-//
-// CacheKey: "core_members"
-//
-// Plan:
-//   1. Check h.Cache.GetList("core_members")
-//      - If hit, return cached data immediately.
-//   2. On miss, call h.Repo.GetCoreMembers(ctx)
-//   3. Store result via h.Cache.SetList("core_members", users)
-//   4. Return fresh data.
-//
-// Invalidation triggers (in HandlerRole admin):
-//   - User role changes (member <-> core_member/vp/president)
-//   - User status changes (e.g., banned)
-//
-// Invalidation: h.Cache.DeleteList("core_members")
-//
-// GetCoreMembersRow (sqlc generated in internal/database/user.sql.go):
-//   type GetCoreMembersRow struct {
-//       ID          uuid.UUID
-//       Name        string
-//       Email       string
-//       Status      AccountStatus
-//       Role        UserRole
-//       Image       sql.NullString
-//       SocialLinks json.RawMessage
-//   }
 func (h *Handler) HandleGetCoreMember(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
-	cached := h.Cache.GetList("core_members")
+	cached := h.Cache.GetList("homepage")
 	if cached != nil {
-		fmt.Println("Cache baby")
-		handler.RespondWithJson(w, http.StatusOK, cached)
+		data := cached.(model.HomepageData)
+		handler.RespondWithJson(w, http.StatusOK, data.CoreMembers)
 		return
 	}
-	user, err := h.Repo.GetCoreMembers(r.Context())
+	coreMembers, err := h.Repo.GetCoreMembers(r.Context())
 	if err != nil {
 		if log != nil {
-			log.Error(fmt.Sprintf("HandleGetAllUser: Failed to get All User: %v", err))
+			log.Error(fmt.Sprintf("HandleGetCoreMember: Failed to get core members: %v", err))
+		}
+		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	arts, err := h.ArtRepo.ListLatestArt(r.Context())
+	if err != nil {
+		if log != nil {
+			log.Error("HandleGetCoreMember: failed to get latest art")
+		}
+		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	events, err := h.EventRepo.ListEvents(r.Context())
+	if err != nil {
+		if log != nil {
+			log.Error("HandleGetCoreMember: failed to get events")
 		}
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
 		return
 	}
 	if log != nil {
-		log.Info("HandleGetAllUser: successfully")
+		log.Info("HandleGetCoreMember: retrieved homepage data")
 	}
-	h.Cache.SetList("core_members", user)
-	handler.RespondWithJson(w, http.StatusOK, user)
+	data := model.HomepageData{
+		LatestArt:   arts,
+		Events:      events,
+		CoreMembers: coreMembers,
+	}
+	h.Cache.SetList("homepage", data)
+	handler.RespondWithJson(w, http.StatusOK, coreMembers)
 }

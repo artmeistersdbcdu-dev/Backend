@@ -73,3 +73,9 @@ type CreateArtRequest struct {
 	Description *string  `json:"description"`
 	Tags        []string `json:"tags"`
 }
+
+type HomepageData struct {
+	LatestArt   any `json:"latest_art"`
+	Events      any `json:"events"`
+	CoreMembers any `json:"core_members"`
+}

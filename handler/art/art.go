@@ -17,8 +17,10 @@ import (
 )
 
 type Handler struct {
-	Repo  database.ArtRepository
-	Cache *cache.Cache
+	Repo      database.ArtRepository
+	EventRepo database.EventRepository
+	UserRepo  database.UserRepository
+	Cache     *cache.Cache
 }
 type ProfileHandler struct {
 	ArtRepo  database.ArtRepository
@@ -147,7 +149,7 @@ func (h *Handler) HandleArtCreation(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Cache.SetArt(id, artCache)
 	h.Cache.DeleteList("approved_arts")
-	h.Cache.DeleteList("latest_arts")
+	h.Cache.DeleteList("homepage")
 	h.Cache.DeleteList("user_arts:" + user.ID.String())
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": artID.String()})
 }
@@ -355,7 +357,7 @@ func (h *Handler) HandleArtDeletion(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Cache.DeleteArt(artId)
 	h.Cache.DeleteList("approved_arts")
-	h.Cache.DeleteList("latest_arts")
+	h.Cache.DeleteList("homepage")
 	h.Cache.DeleteList("user_arts:" + user.ID.String())
 	handler.RespondWithJson(w, http.StatusOK, "Art Work Deleted")
 
@@ -427,7 +429,7 @@ func (h *Handler) HandlerArtUpdation(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Cache.DeleteArt(artId)
 	h.Cache.DeleteList("approved_arts")
-	h.Cache.DeleteList("latest_arts")
+	h.Cache.DeleteList("homepage")
 	h.Cache.DeleteList("user_arts:" + user.ID.String())
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": updatedWork.String()})
 }
@@ -502,9 +504,10 @@ func (h *Handler) HandleGetPendingArt(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HandleLatestArt(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
-	cached := h.Cache.GetList("latest_arts")
+	cached := h.Cache.GetList("homepage")
 	if cached != nil {
-		handler.RespondWithJson(w, http.StatusOK, cached)
+		data := cached.(model.HomepageData)
+		handler.RespondWithJson(w, http.StatusOK, data.LatestArt)
 		return
 	}
 	arts, err := h.Repo.ListLatestArt(r.Context())
@@ -515,10 +518,31 @@ func (h *Handler) HandleLatestArt(w http.ResponseWriter, r *http.Request) {
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
 		return
 	}
-	if log != nil {
-		log.Info("HandleLatestArt: retrieved latest art")
+	events, err := h.EventRepo.ListEvents(r.Context())
+	if err != nil {
+		if log != nil {
+			log.Error("HandleLatestArt: failed to get events")
+		}
+		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
 	}
-	h.Cache.SetList("latest_arts", arts)
+	coreMembers, err := h.UserRepo.GetCoreMembers(r.Context())
+	if err != nil {
+		if log != nil {
+			log.Error("HandleLatestArt: failed to get core members")
+		}
+		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	if log != nil {
+		log.Info("HandleLatestArt: retrieved homepage data")
+	}
+	data := model.HomepageData{
+		LatestArt:   arts,
+		Events:      events,
+		CoreMembers: coreMembers,
+	}
+	h.Cache.SetList("homepage", data)
 	handler.RespondWithJson(w, http.StatusOK, arts)
 }
 

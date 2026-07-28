@@ -43,22 +43,28 @@ func main() {
 
 	//Handlers
 	userHandler := &user.Handler{
-		Repo:  apiCfg.UserRepo,
-		Cache: Cache,
+		Repo:      apiCfg.UserRepo,
+		ArtRepo:   apiCfg.ArtRepo,
+		EventRepo: apiCfg.EventRepo,
+		Cache:     Cache,
 	}
 	middlewareHandler := &middleware.Handler{
 		Repo: apiCfg.UserRepo,
 	}
 	artHanlder := &art.Handler{
-		Repo:  apiCfg.ArtRepo,
-		Cache: Cache,
+		Repo:      apiCfg.ArtRepo,
+		EventRepo: apiCfg.EventRepo,
+		UserRepo:  apiCfg.UserRepo,
+		Cache:     Cache,
 	}
 	artMetaDataHandler := &artmetadata.Handler{
 		Repo: apiCfg.ArtMetaDataRepo,
 	}
 	eventHandler := &event.EventHandler{
-		Repo:  apiCfg.EventRepo,
-		Cache: Cache,
+		Repo:     apiCfg.EventRepo,
+		ArtRepo:  apiCfg.ArtRepo,
+		UserRepo: apiCfg.UserRepo,
+		Cache:    Cache,
 	}
 	eventAttendeeHandler := &event.EventAttendeeHandler{
 		Repo: apiCfg.EventAttendeeRepo,

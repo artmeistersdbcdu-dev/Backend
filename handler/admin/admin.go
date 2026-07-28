@@ -70,6 +70,7 @@ func (h *ArtHandler) HandlerArtStatus(w http.ResponseWriter, r *http.Request) {
 	if h.Cache != nil {
 		h.Cache.DeleteArt(id)
 		h.Cache.DeleteList("approved_arts")
+		h.Cache.DeleteList("homepage")
 	}
 	handler.RespondWithJson(w, http.StatusOK, art)
 }
@@ -154,6 +155,7 @@ func (h *UserHandler) HandlerRole(w http.ResponseWriter, r *http.Request) {
 		h.Cache.DeleteUser(id)
 		h.Cache.DeleteList("approved_users")
 		h.Cache.DeleteList("core_members")
+		h.Cache.DeleteList("homepage")
 	}
 	handler.RespondWithJson(w, http.StatusOK, user)
 }

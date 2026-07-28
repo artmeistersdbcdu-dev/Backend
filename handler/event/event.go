@@ -19,8 +19,10 @@ import (
 )
 
 type EventHandler struct {
-	Repo  database.EventRepository
-	Cache *cache.Cache
+	Repo    database.EventRepository
+	ArtRepo database.ArtRepository
+	UserRepo database.UserRepository
+	Cache   *cache.Cache
 }
 type EventAttendeeHandler struct {
 	Repo  database.EventAttendeesRepository
@@ -106,6 +108,7 @@ func (h *EventHandler) HandleCreateEvent(w http.ResponseWriter, r *http.Request)
 	}
 	h.Cache.SetEvent(id, newCache)
 	h.Cache.DeleteList("events")
+	h.Cache.DeleteList("homepage")
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": res.String()})
 }
 // TODO(Cache): DeleteEvent from cache. Invalidate event list cache.
@@ -134,6 +137,7 @@ func (h *EventHandler) HandleDeleteEvent(w http.ResponseWriter, r *http.Request)
 	}
 	h.Cache.DeleteEvent(eventId)
 	h.Cache.DeleteList("events")
+	h.Cache.DeleteList("homepage")
 	handler.RespondWithJson(w, http.StatusOK, "ok")
 }
 // TODO(Cache): Cache Event by UUID (already reads cache. SetEvent on cache miss).
@@ -188,19 +192,15 @@ func (h *EventHandler) HandleGetEventById(w http.ResponseWriter, r *http.Request
 	h.Cache.SetEvent(eventId, newCache)
 	handler.RespondWithJson(w, http.StatusOK, res)
 }
-// TODO(Cache): HIGH VALUE. Cache event list (T1 route).
-// Cache Miss -> DB ListEvents, Set cache with list key.
-// Cache Hit -> Return cached list.
-// Invalidate when event is created, updated, or deleted.
 func (h *EventHandler) HandleGetAllEvent(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
-	cached := h.Cache.GetList("events")
+	cached := h.Cache.GetList("homepage")
 	if cached != nil {
-		fmt.Println("Cache BABY")
-		handler.RespondWithJson(w, http.StatusOK, cached)
+		data := cached.(model.HomepageData)
+		handler.RespondWithJson(w, http.StatusOK, data.Events)
 		return
 	}
-	res, err := h.Repo.ListEvents(r.Context())
+	events, err := h.Repo.ListEvents(r.Context())
 	if err != nil {
 		if log != nil {
 			log.Error(fmt.Sprintf("HandleGetAllEvent: failed to list events: %v", err))
@@ -208,11 +208,32 @@ func (h *EventHandler) HandleGetAllEvent(w http.ResponseWriter, r *http.Request)
 		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
 		return
 	}
-	if log != nil {
-		log.Info("HandleGetAllEvent: retrieved all events successfully")
+	arts, err := h.ArtRepo.ListLatestArt(r.Context())
+	if err != nil {
+		if log != nil {
+			log.Error("HandleGetAllEvent: failed to get latest art")
+		}
+		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
 	}
-	h.Cache.SetList("events", res)
-	handler.RespondWithJson(w, http.StatusOK, res)
+	coreMembers, err := h.UserRepo.GetCoreMembers(r.Context())
+	if err != nil {
+		if log != nil {
+			log.Error("HandleGetAllEvent: failed to get core members")
+		}
+		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	if log != nil {
+		log.Info("HandleGetAllEvent: retrieved homepage data")
+	}
+	data := model.HomepageData{
+		LatestArt:   arts,
+		Events:      events,
+		CoreMembers: coreMembers,
+	}
+	h.Cache.SetList("homepage", data)
+	handler.RespondWithJson(w, http.StatusOK, events)
 }
 // TODO(Cache): UpdateEvent in cache. Invalidate event list cache.
 func (h *EventHandler) HandleUpdateEvent(w http.ResponseWriter, r *http.Request) {
@@ -294,6 +315,7 @@ func (h *EventHandler) HandleUpdateEvent(w http.ResponseWriter, r *http.Request)
 	}
 	h.Cache.DeleteEvent(id)
 	h.Cache.DeleteList("events")
+	h.Cache.DeleteList("homepage")
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": res.String()})
 }
 // TODO(Cache): Invalidate attendees list cache for this event_id.
