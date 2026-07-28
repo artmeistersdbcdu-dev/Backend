@@ -93,6 +93,20 @@ WHERE status = 'approved'
 ORDER BY created_at DESC;
 
 
+-- name: ListLatestArt :many
+SELECT
+    id,
+    name,
+    description,
+    image,
+    tags,
+    user_id,
+    created_at
+FROM art
+WHERE status = 'approved'
+ORDER BY created_at DESC
+LIMIT 5;
+
 -- name: UpdateArt :one
 UPDATE art
 SET

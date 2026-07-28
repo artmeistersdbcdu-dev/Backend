@@ -13,6 +13,7 @@ func ArtRouter(artHandler *Handler, artMetadataHandler *artmetadata.Handler, mid
 	r := chi.NewRouter()
 	auth := middlewareHandler.MiddlewareAuth
 	// Public routes
+	r.Get("/latest", artHandler.HandleLatestArt)
 	r.Get("/u/{user_id}", artHandler.HandleGetArts)
 	r.Get("/p/{user_id}/{id}", artHandler.HandleGetArtProfileById)
 	r.Get("/{id}", artHandler.HandleGetArtById)

@@ -32,6 +32,7 @@ type ArtRepository interface {
 	UpdateArt(ctx context.Context, arg UpdateArtParams) (uuid.UUID, error)
 	UpdateArtStatus(ctx context.Context, arg UpdateArtStatusParams) (UpdateArtStatusRow, error)
 	CreateArt(ctx context.Context, arg CreateArtParams) (uuid.UUID, error)
+	ListLatestArt(ctx context.Context) ([]ListLatestArtRow, error)
 }
 type ArtMetaDataRepository interface {
 	AddArtComment(ctx context.Context, arg AddArtCommentParams) (ArtComment, error)

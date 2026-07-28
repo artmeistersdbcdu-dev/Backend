@@ -147,6 +147,7 @@ func (h *Handler) HandleArtCreation(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Cache.SetArt(id, artCache)
 	h.Cache.DeleteList("approved_arts")
+	h.Cache.DeleteList("latest_arts")
 	h.Cache.DeleteList("user_arts:" + user.ID.String())
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": artID.String()})
 }
@@ -354,6 +355,7 @@ func (h *Handler) HandleArtDeletion(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Cache.DeleteArt(artId)
 	h.Cache.DeleteList("approved_arts")
+	h.Cache.DeleteList("latest_arts")
 	h.Cache.DeleteList("user_arts:" + user.ID.String())
 	handler.RespondWithJson(w, http.StatusOK, "Art Work Deleted")
 
@@ -425,6 +427,7 @@ func (h *Handler) HandlerArtUpdation(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Cache.DeleteArt(artId)
 	h.Cache.DeleteList("approved_arts")
+	h.Cache.DeleteList("latest_arts")
 	h.Cache.DeleteList("user_arts:" + user.ID.String())
 	handler.RespondWithJson(w, http.StatusOK, map[string]string{"ID": updatedWork.String()})
 }
@@ -497,10 +500,28 @@ func (h *Handler) HandleGetPendingArt(w http.ResponseWriter, r *http.Request) {
 	handler.RespondWithJson(w, http.StatusOK, arts)
 }
 
-// TODO(Cache): HIGH VALUE. Cache approved art list (homepage T1).
-// Cache Miss -> DB ListArt, Set cache with list key.
-// Cache Hit -> Return cached list.
-// Invalidate when art is created, status changes, or art is deleted.
+func (h *Handler) HandleLatestArt(w http.ResponseWriter, r *http.Request) {
+	log, _ := logger.GetLogger()
+	cached := h.Cache.GetList("latest_arts")
+	if cached != nil {
+		handler.RespondWithJson(w, http.StatusOK, cached)
+		return
+	}
+	arts, err := h.Repo.ListLatestArt(r.Context())
+	if err != nil {
+		if log != nil {
+			log.Error("HandleLatestArt: failed to get latest art")
+		}
+		handler.RespondWithJsonCustom(w, http.StatusOK, false, nil)
+		return
+	}
+	if log != nil {
+		log.Info("HandleLatestArt: retrieved latest art")
+	}
+	h.Cache.SetList("latest_arts", arts)
+	handler.RespondWithJson(w, http.StatusOK, arts)
+}
+
 func (h *Handler) HandleGetApprovedArt(w http.ResponseWriter, r *http.Request) {
 	log, _ := logger.GetLogger()
 	cached := h.Cache.GetList("approved_arts")

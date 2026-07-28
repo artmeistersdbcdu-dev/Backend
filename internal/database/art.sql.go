@@ -345,6 +345,62 @@ func (q *Queries) ListArtByTags(ctx context.Context, dollar_1 []string) ([]ListA
 	return items, nil
 }
 
+const listLatestArt = `-- name: ListLatestArt :many
+SELECT
+    id,
+    name,
+    description,
+    image,
+    tags,
+    user_id,
+    created_at
+FROM art
+WHERE status = 'approved'
+ORDER BY created_at DESC
+LIMIT 5
+`
+
+type ListLatestArtRow struct {
+	ID          uuid.UUID
+	Name        string
+	Description sql.NullString
+	Image       string
+	Tags        []string
+	UserID      uuid.UUID
+	CreatedAt   time.Time
+}
+
+func (q *Queries) ListLatestArt(ctx context.Context) ([]ListLatestArtRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLatestArt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLatestArtRow
+	for rows.Next() {
+		var i ListLatestArtRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Image,
+			pq.Array(&i.Tags),
+			&i.UserID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPendingArt = `-- name: ListPendingArt :many
 SELECT
     id,
